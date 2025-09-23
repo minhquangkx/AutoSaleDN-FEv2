@@ -34,6 +34,10 @@ import PrePurchasePage from "./pages/PrePurchasePage";
 import OrdersPage from "./pages/OrdersPage";
 import SellerOrderManagement from "./pages/admin/SellerOrderManagement";
 
+import SellerDashboard from "./pages/seller/SellerDashboard";
+
+import { getApiBaseUrl } from "../util/apiconfig";
+
 const useTalkJS = (customerInfor, isCustomerInfoLoaded, hasCustomerInfoError, targetStaff = null) => {
   const [talkjsPopup, setTalkjsPopup] = useState(null);
   const [isTalkjsLoaded, setIsTalkjsLoaded] = useState(false);
@@ -174,6 +178,8 @@ function UserLayout({ children }) {
   const [isCustomerInfoLoaded, setIsCustomerInfoLoaded] = useState(false);
   const [hasCustomerInfoError, setHasCustomerInfoError] = useState(false);
 
+  const API_BASE = getApiBaseUrl();
+
   // Thêm state cho thông tin admin showroom nếu có
   const [showroomAdminInfo, setShowroomAdminInfo] = useState(null);
 
@@ -183,7 +189,7 @@ function UserLayout({ children }) {
       setHasCustomerInfoError(false);
       setIsCustomerInfoLoaded(false);
 
-      fetch('/api/User/me', {
+      fetch(`${API_BASE}/api/User/me`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -404,7 +410,7 @@ function App() {
         <Route
           path="/admin/*"
           element={
-            <RequireRole allow={["Admin", "Seller"]}>
+            <RequireRole allow={["Admin"]}>
               <DashboardLayout>
                 <Routes>
                   <Route path="dashboard" element={<Dashboard />} />
@@ -460,7 +466,23 @@ function App() {
             </RequireRole>
           }
         />
-
+        <Route
+          path="/seller/*"
+          element={
+            <RequireRole allow={["Seller"]}>
+              <DashboardLayout>
+                <Routes>
+                  <Route path="dashboard" element={<SellerDashboard />} />
+                  {/* <Route path="showroom" element={<SellerShowroom />} />
+                  <Route path="cars" element={<SellerCarManagement />} />
+                  <Route path="orders" element={<SellerOrderManagement />} />
+                  <Route path="messages" element={<SellerMessages />} />
+                  <Route path="" element={<Navigate to="dashboard" replace />} /> */}
+                </Routes>
+              </DashboardLayout>
+            </RequireRole>
+          }
+        />
         {/* Catch-all route */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

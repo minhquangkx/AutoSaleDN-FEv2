@@ -10,10 +10,10 @@ const fetchRevenueData = async () => {
   const token = localStorage.getItem('token');
   const currentYear = new Date().getFullYear();
   const API_BASE = getApiBaseUrl();
-  // Get monthly data for current year
+
   const monthlyData = [];
   for (let month = 1; month <= 12; month++) {
-    const url = `${API_BASE}/api/Admin/reports/revenue/monthly?year=${currentYear}&month=${month}`;
+    const url = `${API_BASE}/Seller/reports/revenue/monthly?year=${currentYear}&month=${month}`;
     const res = await fetch(url, {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -28,10 +28,10 @@ const fetchRevenueData = async () => {
     monthlyData.push(data.totalRevenue);
   }
 
-  // Get yearly data for comparison
+  // Get yearly data for comparison for the seller's showroom
   const yearlyData = [];
   for (let year = currentYear - 2; year <= currentYear; year++) {
-    const url = `${API_BASE}/api/Admin/reports/revenue/yearly?year=${year}`;
+    const url = `${API_BASE}/Seller/reports/revenue/yearly?year=${year}`;
     const res = await fetch(url, {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -58,16 +58,17 @@ const fetchRevenueData = async () => {
   };
 };
 
-const fetchDashboardData = async () => {
-  const API_BASE = getApiBaseUrl();
+// Giả định có endpoint API để lấy dữ liệu dashboard của riêng seller
+const fetchSellerDashboardData = async () => {
   const token = localStorage.getItem('token');
+  const API_BASE = getApiBaseUrl();
   try {
-    const topCarsRes = await fetch(`${API_BASE}/api/Admin/reports/top-selling-cars`, {
+    const topCarsRes = await fetch(`${API_BASE}/Seller/reports/top-selling-cars`, {
       headers: { Authorization: `Bearer ${token}` }
     });
     const topCars = await topCarsRes.json();
 
-    const showroomRes = await fetch(`${API_BASE}/api/Admin/reports/cars-in-showroom`, {
+    const showroomRes = await fetch(`${API_BASE}/Seller/reports/my-showroom-inventory`, {
       headers: { Authorization: `Bearer ${token}` }
     });
     const showroomInventory = await showroomRes.json();
@@ -78,26 +79,27 @@ const fetchDashboardData = async () => {
   }
 };
 
-export default function AdminDashboard() {
+export default function SellerDashboard() {
   const [selectedView, setSelectedView] = useState("monthly");
   const [revenueData, setRevenueData] = useState(null);
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
-  const API_BASE = getApiBaseUrl();
 
   const handleShowroomDetail = (showroomId) => {
-    navigate(`/showroom/${showroomId}`);
+    // Seller có thể xem chi tiết showroom của mình
+    navigate(`/seller/showroom/${showroomId}`);
   };
 
   useEffect(() => {
     const loadData = async () => {
       try {
         setLoading(true);
+        // Gọi các hàm fetch đã thay đổi
         const [revenue, dashboard] = await Promise.all([
           fetchRevenueData(),
-          fetchDashboardData()
+          fetchSellerDashboardData()
         ]);
         setRevenueData(revenue);
         setDashboardData(dashboard);
@@ -228,6 +230,9 @@ export default function AdminDashboard() {
 
     const yearGrowth = lastYearTotal > 0 ? ((currentYearTotal - lastYearTotal) / lastYearTotal * 100) : 0;
 
+    // Các thông tin này sẽ chỉ dành cho showroom của seller
+    const sellerShowroom = dashboardData?.showroomInventory || {};
+
     return {
       currentYearTotal,
       lastYearTotal,
@@ -242,8 +247,8 @@ export default function AdminDashboard() {
       },
       averageMonthly: (currentYearTotal / 12).toFixed(0),
       totalCarsSold: dashboardData?.topCars?.reduce((acc, car) => acc + car.totalSold, 0) || 0,
-      totalInventory: dashboardData?.showroomInventory ?
-        Object.values(dashboardData.showroomInventory.showrooms || {}).reduce((acc, showroom) => acc + showroom.totalCars, 0) : 0
+      totalInventory: sellerShowroom.totalCars || 0,
+      sellerShowroom
     };
   };
 
@@ -284,6 +289,8 @@ export default function AdminDashboard() {
     );
   }
 
+  const sellerShowroom = insights?.sellerShowroom;
+
   return (
     <div className="flex h-screen bg-gray-50">
       <AdminSidebar />
@@ -296,8 +303,8 @@ export default function AdminDashboard() {
               <div className="flex items-center mb-4 md:mb-0">
                 <Activity className="h-8 w-8 text-blue-600 mr-3" />
                 <div>
-                  <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-                  <p className="text-gray-600">Welcome back! Here's what's happening with your business.</p>
+                  <h1 className="text-3xl font-bold text-gray-900">Seller Dashboard</h1>
+                  <p className="text-gray-600">Welcome back! Here's what's happening with your showroom.</p>
                 </div>
               </div>
               <div className="flex bg-white rounded-xl shadow-sm p-1 border">
@@ -321,33 +328,33 @@ export default function AdminDashboard() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             {/* Total Revenue */}
             <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200 hover:shadow-md transition-shadow">
-  <div className="flex items-center justify-between mb-4">
-    <div className="flex items-center">
-      <div className="p-2 bg-green-100 rounded-lg">
-        <DollarSign className="h-6 w-6 text-green-600" />
-      </div>
-      <div className="ml-3">
-        <p className="text-sm font-medium text-gray-500">Total Revenue</p>
-        <p className="text-2xl font-bold text-gray-900">
-          {insights?.currentYearTotal
-            ? insights.currentYearTotal.toLocaleString("vi-VN", { style: "currency", currency: "VND" })
-            : (0).toLocaleString("vi-VN", { style: "currency", currency: "VND" })}
-        </p>
-      </div>
-    </div>
-  </div>
-  <div className="flex items-center">
-    {insights?.yearGrowth >= 0 ? (
-      <TrendingUp className="h-4 w-4 text-green-500 mr-1" />
-    ) : (
-      <TrendingDown className="h-4 w-4 text-red-500 mr-1" />
-    )}
-    <span className={`text-sm font-medium ${insights?.yearGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-      {insights?.yearGrowth || 0}%
-    </span>
-    <span className="text-sm text-gray-500 ml-2">vs last year</span>
-  </div>
-</div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center">
+                  <div className="p-2 bg-green-100 rounded-lg">
+                    <DollarSign className="h-6 w-6 text-green-600" />
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm font-medium text-gray-500">Total Revenue</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {insights?.currentYearTotal
+                        ? insights.currentYearTotal.toLocaleString("vi-VN", { style: "currency", currency: "VND" })
+                        : (0).toLocaleString("vi-VN", { style: "currency", currency: "VND" })}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center">
+                {insights?.yearGrowth >= 0 ? (
+                  <TrendingUp className="h-4 w-4 text-green-500 mr-1" />
+                ) : (
+                  <TrendingDown className="h-4 w-4 text-red-500 mr-1" />
+                )}
+                <span className={`text-sm font-medium ${insights?.yearGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {insights?.yearGrowth || 0}%
+                </span>
+                <span className="text-sm text-gray-500 ml-2">vs last year</span>
+              </div>
+            </div>
 
             {/* Monthly Average */}
             <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200 hover:shadow-md transition-shadow">
@@ -393,13 +400,13 @@ export default function AdminDashboard() {
                     <Package className="h-6 w-6 text-orange-600" />
                   </div>
                   <div className="ml-3">
-                    <p className="text-sm font-medium text-gray-500">Inventory</p>
+                    <p className="text-sm font-medium text-gray-500">My Showroom Inventory</p>
                     <p className="text-2xl font-bold text-gray-900">{insights?.totalInventory || 0}</p>
                   </div>
                 </div>
               </div>
               <div className="text-sm text-gray-500">
-                {Object.keys(dashboardData?.showroomInventory?.showrooms || {}).length || 0} locations
+                Location: {sellerShowroom?.location || 'N/A'}
               </div>
             </div>
           </div>
@@ -463,11 +470,11 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          {/* Top Selling Cars */}
+          {/* Top Selling Cars & My Showroom Inventory */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Top Selling Cars */}
+            {/* Top Selling Cars (Seller's showroom) */}
             <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900 mb-6">Top Selling Cars</h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-6">Top Selling Cars (My Showroom)</h3>
               <div className="space-y-4">
                 {dashboardData?.topCars?.map((car, index) => (
                   <div key={car.ModelId} className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
@@ -510,142 +517,140 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            {/* Enhanced Showroom Inventory */}
-            <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-semibold text-gray-900">Showroom Inventory</h3>
-                <span className="text-sm text-gray-500">
-                  {Object.keys(dashboardData?.showroomInventory?.showrooms || {}).length} showrooms
-                </span>
-              </div>
+            {/* My Showroom Inventory - Đã đơn giản hóa để hiển thị 1 showroom duy nhất */}
+            {sellerShowroom && (
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-semibold text-gray-900">My Showroom Inventory</h3>
+                  <span className="text-sm text-gray-500">
+                    {sellerShowroom.totalCars} vehicles
+                  </span>
+                </div>
 
-              <div className="space-y-6">
-                {Object.entries(dashboardData?.showroomInventory?.showrooms || {}).map(([location, details]) => (
-                  <div key={location} className="bg-gradient-to-r from-gray-50 to-blue-50 rounded-lg p-5 border border-gray-200 hover:shadow-md transition-all duration-300">
-                    {/* Showroom Header */}
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center">
-                        <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center mr-3">
-                          <MapPin className="h-5 w-5 text-white" />
-                        </div>
-                        <div>
-                          <h4 className="text-lg font-semibold text-gray-900">{location}</h4>
-                          <p className="text-sm text-gray-600">{details.totalCars} vehicles available</p>
-                        </div>
+                <div className="bg-gradient-to-r from-gray-50 to-blue-50 rounded-lg p-5 border border-gray-200 hover:shadow-md transition-all duration-300">
+                  {/* Showroom Header */}
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center">
+                      <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center mr-3">
+                        <MapPin className="h-5 w-5 text-white" />
                       </div>
-                      <button
-                        onClick={() => handleShowroomDetail(details.showroomId || location)}
-                        className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-                      >
-                        <Eye className="h-4 w-4 mr-2" />
-                        View Details
-                        <ArrowRight className="h-4 w-4 ml-2" />
-                      </button>
+                      <div>
+                        <h4 className="text-lg font-semibold text-gray-900">{sellerShowroom.location}</h4>
+                        <p className="text-sm text-gray-600">{sellerShowroom.totalCars} vehicles available</p>
+                      </div>
                     </div>
+                    <button
+                      onClick={() => handleShowroomDetail(sellerShowroom.showroomId || sellerShowroom.location)}
+                      className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                    >
+                      <Eye className="h-4 w-4 mr-2" />
+                      View Details
+                      <ArrowRight className="h-4 w-4 ml-2" />
+                    </button>
+                  </div>
 
-                    {/* Enhanced Brand and Model Display */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      {/* Top Brands */}
-                      <div className="bg-white rounded-lg p-4 border border-gray-100">
-                        <div className="flex items-center mb-3">
-                          <div className="w-2 h-2 bg-blue-600 rounded-full mr-2"></div>
-                          <h5 className="text-sm font-semibold text-gray-900">Top Brands</h5>
-                        </div>
-                        <div className="space-y-2">
-                          {details.brands?.slice(0, 3).map((brand, index) => (
-                            <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors">
-                              <div className="flex items-center">
-                                <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-md flex items-center justify-center mr-3">
-                                  <span className="text-white text-xs font-bold">
-                                    {brand.brandName?.charAt(0)}
-                                  </span>
-                                </div>
-                                <span className="text-sm font-medium text-gray-700">{brand.brandName}</span>
-                              </div>
-                              <div className="text-right">
-                                <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
-                                  {brand.count} cars
-                                </span>
-                              </div>
-                            </div>
-                          ))}
-                          {details.brands?.length > 3 && (
-                            <div className="text-center">
-                              <span className="text-xs text-gray-500">
-                                +{details.brands.length - 3} more brands
-                              </span>
-                            </div>
-                          )}
-                        </div>
+                  {/* Enhanced Brand and Model Display */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Top Brands */}
+                    <div className="bg-white rounded-lg p-4 border border-gray-100">
+                      <div className="flex items-center mb-3">
+                        <div className="w-2 h-2 bg-blue-600 rounded-full mr-2"></div>
+                        <h5 className="text-sm font-semibold text-gray-900">Top Brands</h5>
                       </div>
-
-                      {/* Available Models */}
-                      <div className="bg-white rounded-lg p-4 border border-gray-100">
-                        <div className="flex items-center mb-3">
-                          <div className="w-2 h-2 bg-green-600 rounded-full mr-2"></div>
-                          <h5 className="text-sm font-semibold text-gray-900">Popular Models</h5>
-                        </div>
-                        <div className="space-y-2">
-                          {details.models?.slice(0, 3).map((model, index) => (
-                            <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors">
-                              <div className="flex items-center">
-                                <div className="w-8 h-8 bg-gray-200 rounded-md overflow-hidden mr-3">
-                                  <img
-                                    src={model.imageUrl || `${API_BASE}/api/placeholder/32/32`}
-                                    alt={model.modelName}
-                                    className="w-full h-full object-cover"
-                                    onError={(e) => {
-                                      e.target.style.display = 'none';
-                                      e.target.nextSibling.style.display = 'flex';
-                                    }}
-                                  />
-                                  <div className="w-full h-full bg-gradient-to-br from-green-500 to-teal-600 flex items-center justify-center" style={{ display: 'none' }}>
-                                    <Car className="h-4 w-4 text-white" />
-                                  </div>
-                                </div>
-                                <div>
-                                  <span className="text-sm font-medium text-gray-700 block">{model.modelName}</span>
-                                  <span className="text-xs text-gray-500">{model.brandName}</span>
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
-                                  {model.availableQuantity} units
+                      <div className="space-y-2">
+                        {sellerShowroom.brands?.slice(0, 3).map((brand, index) => (
+                          <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors">
+                            <div className="flex items-center">
+                              <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-md flex items-center justify-center mr-3">
+                                <span className="text-white text-xs font-bold">
+                                  {brand.brandName?.charAt(0)}
                                 </span>
                               </div>
+                              <span className="text-sm font-medium text-gray-700">{brand.brandName}</span>
                             </div>
-                          ))}
-                          {details.models?.length > 3 && (
-                            <div className="text-center">
-                              <span className="text-xs text-gray-500">
-                                +{details.models.length - 3} more models
+                            <div className="text-right">
+                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                                {brand.count} cars
                               </span>
                             </div>
-                          )}
-                        </div>
+                          </div>
+                        ))}
+                        {sellerShowroom.brands?.length > 3 && (
+                          <div className="text-center">
+                            <span className="text-xs text-gray-500">
+                              +{sellerShowroom.brands.length - 3} more brands
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
 
-                    {/* Quick Stats */}
-                    <div className="mt-4 pt-4 border-t border-gray-200">
-                      <div className="flex items-center justify-between text-sm">
-                        <div className="flex items-center space-x-4">
-                          <span className="text-gray-600">
-                            <strong className="text-gray-900">{details.brands?.length || 0}</strong> brands
-                          </span>
-                          <span className="text-gray-600">
-                            <strong className="text-gray-900">{details.models?.length || 0}</strong> models
-                          </span>
-                        </div>
-                        <div className="flex items-center text-gray-500">
-                          <span className="text-xs">Last updated: {details.lastUpdated || 'Today'}</span>
-                        </div>
+                    {/* Available Models */}
+                    <div className="bg-white rounded-lg p-4 border border-gray-100">
+                      <div className="flex items-center mb-3">
+                        <div className="w-2 h-2 bg-green-600 rounded-full mr-2"></div>
+                        <h5 className="text-sm font-semibold text-gray-900">Popular Models</h5>
+                      </div>
+                      <div className="space-y-2">
+                        {sellerShowroom.models?.slice(0, 3).map((model, index) => (
+                          <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors">
+                            <div className="flex items-center">
+                              <div className="w-8 h-8 bg-gray-200 rounded-md overflow-hidden mr-3">
+                                <img
+                                  src={model.imageUrl || '/api/placeholder/32/32'}
+                                  alt={model.modelName}
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => {
+                                    e.target.style.display = 'none';
+                                    e.target.nextSibling.style.display = 'flex';
+                                  }}
+                                />
+                                <div className="w-full h-full bg-gradient-to-br from-green-500 to-teal-600 flex items-center justify-center" style={{ display: 'none' }}>
+                                  <Car className="h-4 w-4 text-white" />
+                                </div>
+                              </div>
+                              <div>
+                                <span className="text-sm font-medium text-gray-700 block">{model.modelName}</span>
+                                <span className="text-xs text-gray-500">{model.brandName}</span>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                                {model.availableQuantity} units
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                        {sellerShowroom.models?.length > 3 && (
+                          <div className="text-center">
+                            <span className="text-xs text-gray-500">
+                              +{sellerShowroom.models.length - 3} more models
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
-                ))}
+
+                  {/* Quick Stats */}
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <div className="flex items-center justify-between text-sm">
+                      <div className="flex items-center space-x-4">
+                        <span className="text-gray-600">
+                          <strong className="text-gray-900">{sellerShowroom.brands?.length || 0}</strong> brands
+                        </span>
+                        <span className="text-gray-600">
+                          <strong className="text-gray-900">{sellerShowroom.models?.length || 0}</strong> models
+                        </span>
+                      </div>
+                      <div className="flex items-center text-gray-500">
+                        <span className="text-xs">Last updated: {sellerShowroom.lastUpdated || 'Today'}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </main>
       </div>
