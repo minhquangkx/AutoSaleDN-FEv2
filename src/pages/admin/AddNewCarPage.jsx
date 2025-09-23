@@ -4,7 +4,10 @@ import AdminSidebar from "../../components/admin/AdminSidebar";
 import AdminTopbar from "../../components/admin/AdminTopbar";
 import VehiclePhotosUpload from "../../components/admin/VehiclePhotosUpload";
 
-// Helper constants for select options
+import ReactQuill from "react-quill-new";
+import "react-quill-new/dist/quill.snow.css";
+
+// Helper constants for select options (Giữ nguyên)
 const YEAR_OPTIONS = Array.from({ length: 76 }, (_, i) => 2025 - i);
 const FUEL_TYPE_OPTIONS = [
   { value: "petrol", label: "Petrol" },
@@ -25,10 +28,7 @@ const CONDITION_OPTIONS = [
   { value: "Good", label: "Good" },
   { value: "Fair", label: "Fair" },
 ];
-const RENTSELL_OPTIONS = [
-  { value: "Rent", label: "For Rent" },
-  { value: "Sell", label: "For Sale" },
-];
+
 const TRANSMISSION_OPTIONS = [
   { value: "Automatic", label: "Automatic" },
   { value: "Manual", label: "Manual" },
@@ -50,16 +50,14 @@ const SEATING_CAPACITY_OPTIONS = Array.from({ length: 8 }, (_, i) => ({
 
 const formInit = {
   modelId: "",
-  userId: "",
   year: "",
   mileage: "",
   price: "",
   condition: "Good",
-  rentSell: "Sell",
   description: "",
   certified: false,
   vin: "",
-  color: "", // This will now store the color name/value from the selected option
+  color: "",
   interiorColor: "",
   transmission: "",
   engine: "",
@@ -69,6 +67,7 @@ const formInit = {
   registrationFee: "",
   taxRate: "",
   featureIds: [],
+  storeLocationId: "",
 };
 
 export default function AddNewCarPage() {
@@ -80,7 +79,7 @@ export default function AddNewCarPage() {
   const [carModels, setCarModels] = useState([]);
   const [carColors, setCarColors] = useState([]);
   const [features, setFeatures] = useState([]);
-
+  const [storeLocationsWithUsers, setStoreLocationsWithUsers] = useState([]);
 
   const selectedFileNames = imagePreviews.map(item => item.name).join(", ");
 
@@ -110,7 +109,41 @@ export default function AddNewCarPage() {
         });
       }
     };
+
+    const fetchStoreLocations = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await fetch("/api/admin/storelocations", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        if (!response.ok) {
+          throw new Error("Failed to fetch store locations.");
+        }
+        const result = await response.json();
+        if (result.success && Array.isArray(result.data)) {
+          setStoreLocationsWithUsers(result.data);
+        } else {
+          console.error("API returned an error or unexpected data format:", result.message);
+          Swal.fire({
+            icon: "error",
+            title: "Error!",
+            text: result.message || "Failed to load store locations due to data format. Please try again.",
+          });
+        }
+      } catch (error) {
+        console.error("Error fetching store locations:", error);
+        Swal.fire({
+          icon: "error",
+          title: "Error!",
+          text: "Failed to load store locations. Please try again.",
+        });
+      }
+    };
+
     fetchFormData();
+    fetchStoreLocations();
   }, []);
 
   const handleInputChange = (e) => {
@@ -137,7 +170,17 @@ export default function AddNewCarPage() {
     setUploading(true);
 
     try {
-      // Derive imageUrls and videoUrls from imagePreviews
+      const selectedStoreLocation = storeLocationsWithUsers.find(
+        (item) => item.storeLocation.storeLocationId === parseInt(formData.storeLocationId)
+      );
+
+      if (!selectedStoreLocation) {
+        throw new Error("Invalid store location selected. Please refresh and try again.");
+      }
+
+      const userIdFromStore = selectedStoreLocation.userId;
+
+      // 2. Chuẩn bị dữ liệu để gửi lên API
       const imageUrls = imagePreviews
         .filter((item) => item.type === "image")
         .map((item) => item.url);
@@ -147,6 +190,7 @@ export default function AddNewCarPage() {
 
       const dataToSend = {
         ...formData,
+        userId: userIdFromStore,
         imageUrls: imageUrls,
         year: parseInt(formData.year),
         mileage: parseFloat(formData.mileage),
@@ -155,6 +199,7 @@ export default function AddNewCarPage() {
         taxRate: parseFloat(Number(formData.taxRate).toFixed(2)),
         seatingCapacity: parseInt(formData.seatingCapacity),
         videoUrls: videoUrls,
+        storeLocationId: parseInt(formData.storeLocationId),
       };
 
       console.log("Sending data:", dataToSend);
@@ -175,14 +220,13 @@ export default function AddNewCarPage() {
         Swal.fire({
           icon: "success",
           title: "Success!",
-          text: result.message || "Car added successfully!",
+          text: result.message || "Car and showroom allocation added successfully!",
           timer: 2000,
           showConfirmButton: false,
         });
-        // Reset form
         setFormData(formInit);
-        setImageFiles([]); // Keep if you still need to track original File objects
-        setImagePreviews([]); // Reset image previews
+        setImageFiles([]);
+        setImagePreviews([]);
       } else {
         throw new Error(result.message || "Failed to add car.");
       }
@@ -235,21 +279,6 @@ export default function AddNewCarPage() {
                         </option>
                       ))}
                     </select>
-                  </div>
-                  <div>
-                    <label htmlFor="userId" className="block text-gray-700 font-medium mb-2">
-                      User ID (Seller) <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      id="userId"
-                      name="userId"
-                      value={formData.userId}
-                      onChange={handleInputChange}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition duration-150"
-                      placeholder="e.g., U001"
-                      required
-                    />
                   </div>
                   <div>
                     <label htmlFor="year" className="block text-gray-700 font-medium mb-2">
@@ -320,39 +349,46 @@ export default function AddNewCarPage() {
                       ))}
                     </select>
                   </div>
+
                   <div>
-                    <label htmlFor="rentSell" className="block text-gray-700 font-medium mb-2">
-                      Listing Type <span className="text-red-500">*</span>
+                    <label htmlFor="storeLocationId" className="block text-gray-700 font-medium mb-2">
+                      Assign to Showroom <span className="text-red-500">*</span>
                     </label>
                     <select
-                      id="rentSell"
-                      name="rentSell"
-                      value={formData.rentSell}
+                      id="storeLocationId"
+                      name="storeLocationId"
+                      value={formData.storeLocationId}
                       onChange={handleInputChange}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition duration-150 bg-white"
                       required
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition duration-150 bg-white"
                     >
-                      {RENTSELL_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
+                      <option value="">Select Showroom</option>
+                      {storeLocationsWithUsers.map((item) => (
+                        <option key={item.storeLocation.storeLocationId} value={item.storeLocation.storeLocationId}>
+                          {item.storeLocation.name}
                         </option>
                       ))}
                     </select>
                   </div>
+
                   <div className="md:col-span-2">
                     <label htmlFor="description" className="block text-gray-700 font-medium mb-2">
                       Description
                     </label>
-                    <textarea
-                      id="description"
-                      name="description"
+                    <ReactQuill
+                      theme="snow"
                       value={formData.description}
-                      onChange={handleInputChange}
-                      rows="4"
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition duration-150"
-                      placeholder="Provide a detailed description of the car..."
-                    ></textarea>
+                      onChange={(content) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          description: content,
+                        }))
+                      }
+                      className="bg-white rounded-xl quill-editor-lg"
+                      required
+                    />
                   </div>
+
                   <div className="flex items-center col-span-2">
                     <input
                       type="checkbox"
@@ -587,19 +623,18 @@ export default function AddNewCarPage() {
                   Vehicle Photos/Videos
                 </h2>
                 <VehiclePhotosUpload
-                  setImagePreviews={setImagePreviews} // Only pass the setter for imagePreviews
+                  setImagePreviews={setImagePreviews}
                 />
 
-                {/* Display selected file names (derived from imagePreviews) */}
                 {selectedFileNames.length > 0 && (
                   <div className="text-sm text-gray-700 mb-2 whitespace-normal break-words mt-2">
-                   {selectedFileNames}
+                    {selectedFileNames}
                   </div>
                 )}
 
                 <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-4">
                   {imagePreviews.map((item, idx) => (
-                    <div key={item.url || idx} className="relative group"> {/* Use item.url as key if unique, otherwise use idx */}
+                    <div key={item.url || idx} className="relative group">
                       {item.type === "image" ? (
                         <img
                           src={item.url}
@@ -618,12 +653,10 @@ export default function AddNewCarPage() {
                       <button
                         type="button"
                         onClick={() => {
-                          // Update imagePreviews to remove the deleted item
                           setImagePreviews((prev) => {
                             const updated = prev.filter((_, i) => i !== idx);
                             return updated;
                           });
-                          // selectedFileNames is now derived, so no need to update here
                         }}
                         className="absolute top-2 right-2 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold shadow hover:bg-red-700"
                         title="Remove"
@@ -633,7 +666,6 @@ export default function AddNewCarPage() {
                     </div>
                   ))}
                 </div>
-
               </section>
 
               {/* Action Buttons */}
@@ -642,8 +674,8 @@ export default function AddNewCarPage() {
                   type="button"
                   onClick={() => {
                     setFormData(formInit);
-                    setImageFiles([]); // Keep if you still need to track original File objects
-                    setImagePreviews([]); // Reset image previews (and thus file names)
+                    setImageFiles([]);
+                    setImagePreviews([]);
                   }}
                   className="px-6 py-3 bg-gray-200 rounded-xl text-gray-700 hover:bg-gray-300 transition-colors"
                 >
